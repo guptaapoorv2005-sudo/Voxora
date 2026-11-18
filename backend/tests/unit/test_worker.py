@@ -410,6 +410,8 @@ def test_create_worker_server_registers_effective_agent_name() -> None:
     try:
         server = worker.create_worker_server(_make_settings())
         assert getattr(server, "_agent_name", None) == "voxora-agent"
+        assert server._num_idle_processes == 0
+        assert server._host == "127.0.0.1"
     finally:
         sys.modules.pop("worker", None)
 

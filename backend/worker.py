@@ -588,7 +588,9 @@ def create_worker_server(settings: WorkerSettings) -> AgentServer:
     effective_agent_name = settings.effective_agent_name
     os.environ["LIVEKIT_AGENT_NAME"] = effective_agent_name
 
-    server = AgentServer()
+    # On a small shared instance, start job processes only when a call arrives.
+    # Keep LiveKit's internal health server local so Render exposes the API port.
+    server = AgentServer(num_idle_processes=0, host="127.0.0.1")
     server.rtc_session(entrypoint, agent_name=effective_agent_name)
 
     registered_name = getattr(server, "_agent_name", None)

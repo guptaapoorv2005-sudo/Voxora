@@ -173,7 +173,7 @@ function ActiveVoiceSession({ roomName, onLeave }: ActiveVoiceSessionProps) {
     };
   }, [room]);
 
-  // 15-second worker join timeout guard
+  // Starting an agent process on a small instance can take longer than a warm join.
   useEffect(() => {
     if (connectionState !== ConnectionState.Connected || hasAgentJoined || isAgentPresent) {
       return;
@@ -181,7 +181,7 @@ function ActiveVoiceSession({ roomName, onLeave }: ActiveVoiceSessionProps) {
 
     const timer = setTimeout(() => {
       setTimeoutExpired(true);
-    }, 15000);
+    }, 45000);
 
     return () => clearTimeout(timer);
   }, [connectionState, hasAgentJoined, isAgentPresent]);
@@ -248,11 +248,8 @@ function ActiveVoiceSession({ roomName, onLeave }: ActiveVoiceSessionProps) {
       {/* Timeout Alert */}
       {timeoutExpired && !isAgentPresent && !agentDeparted && (
         <div className="w-full p-4 rounded-xl bg-amber-950/80 border border-amber-600/70 text-amber-200 text-xs space-y-1 text-center">
-          <p className="font-semibold text-amber-100">Agent Join Timeout (15s)</p>
-          <p>Voxora worker did not join room within 15 seconds.</p>
-          <p className="text-amber-300/80">
-            Ensure <code className="px-1 py-0.5 bg-amber-900 rounded font-mono">python worker.py dev</code> is running and connected to the same LiveKit project.
-          </p>
+          <p className="font-semibold text-amber-100">The receptionist is taking longer than expected</p>
+          <p>Please wait a little longer, or end the call and try again.</p>
         </div>
       )}
 

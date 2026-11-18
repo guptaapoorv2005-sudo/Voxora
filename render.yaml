@@ -6,7 +6,7 @@ services:
     rootDir: backend
     plan: free
     buildCommand: uv sync --locked --no-dev
-    startCommand: uv run --no-sync python run_render.py
+    startCommand: .venv/bin/python run_render.py
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
