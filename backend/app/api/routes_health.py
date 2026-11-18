@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import Settings, get_settings
+from app.core.config import AppSettings, get_settings
 from app.db.session import get_db
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ router = APIRouter(tags=["health"])
 async def health_check(
     response: Response,
     db: AsyncSession = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: AppSettings = Depends(get_settings),
 ) -> dict[str, str]:
     db_status = "ok"
     try:

@@ -7,8 +7,8 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from app.core.config import get_settings
-from app.db.session import Base
+from app.core.config import get_settings, normalize_asyncpg_url
+from app.db.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -31,7 +31,7 @@ if not db_url:
         db_url = None
 
 if db_url:
-    config.set_main_option("sqlalchemy.url", db_url)
+    config.set_main_option("sqlalchemy.url", normalize_asyncpg_url(db_url))
 
 
 def run_migrations_offline() -> None:

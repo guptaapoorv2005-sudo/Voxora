@@ -8,11 +8,12 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from app.core.config import Settings, get_settings
+from app.core.config import AppSettings, get_settings
 
 
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy ORM models."""
+
     pass
 
 
@@ -20,7 +21,7 @@ _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
-def get_engine(settings: Settings | None = None) -> AsyncEngine:
+def get_engine(settings: AppSettings | None = None) -> AsyncEngine:
     global _engine
     if _engine is None:
         cfg = settings or get_settings()
@@ -32,7 +33,7 @@ def get_engine(settings: Settings | None = None) -> AsyncEngine:
     return _engine
 
 
-def get_session_factory(settings: Settings | None = None) -> async_sessionmaker[AsyncSession]:
+def get_session_factory(settings: AppSettings | None = None) -> async_sessionmaker[AsyncSession]:
     global _session_factory
     if _session_factory is None:
         engine = get_engine(settings)

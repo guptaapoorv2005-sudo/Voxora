@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import sys
 from datetime import UTC, datetime
 
@@ -12,11 +13,24 @@ class JSONFormatter(logging.Formatter):
             "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": _redact(record.getMessage()),
         }
         if record.exc_info:
-            log_obj["exception"] = self.formatException(record.exc_info)
+            # Exception messages and SQL parameters can contain credentials or caller data.
+            # Keep the type for diagnosis without serializing the exception payload.
+            log_obj["exception_type"] = (
+                record.exc_info[0].__name__ if record.exc_info[0] else "Exception"
+            )
         return json.dumps(log_obj)
+
+
+def _redact(message: str) -> str:
+    """Remove common contact details and credential-bearing URLs from log messages."""
+    message = re.sub(
+        r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[REDACTED]", message, flags=re.I
+    )
+    message = re.sub(r"\b[a-z][a-z0-9+.-]*://[^\s]+", "[REDACTED URL]", message, flags=re.I)
+    return re.sub(r"(?<!\w)\+?\d[\d ()-]{7,}\d(?!\w)", "[REDACTED]", message)
 
 
 def setup_logging(level: str = "INFO") -> None:
