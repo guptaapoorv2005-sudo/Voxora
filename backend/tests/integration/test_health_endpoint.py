@@ -5,9 +5,7 @@ from httpx import AsyncClient
 
 _target_db = os.getenv("TEST_DATABASE_URL") or os.getenv("DATABASE_URL") or ""
 _has_live_db = bool(
-    _target_db
-    and "dummy:dummy" not in _target_db
-    and "user:password" not in _target_db
+    _target_db and "dummy:dummy" not in _target_db and "user:password" not in _target_db
 )
 
 
