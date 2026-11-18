@@ -84,35 +84,32 @@ def _mark_failure(exc: Exception) -> None:
         reason = "operation_failed"
     _mark_trace("failed", reason)
 
-DEMO_HANDOFF_SCRIPTS = {
+HANDOFF_SCRIPTS = {
     "caller_requested": (
-        "Because this is a demonstration system for the Voxora voice AI receptionist, "
-        "live telephone transfer is not available. In a production clinic, this call would now transfer to "
-        "reception staff. If you need assistance, please consult your healthcare provider directly."
+        "A live transfer is not available. Please contact the clinic reception directly for assistance."
     ),
     "caller_distress": (
         "I sense that this conversation may be better handled by a human staff member. "
-        "Because this is a demonstration system, live transfer is not available. "
+        "A live transfer is not available. "
         "Please reach out to the clinic reception directly during business hours."
     ),
     "unresolved_query": (
-        "Because this is a demonstration system, I cannot fully resolve this request and "
-        "live telephone transfer is not available. In a production clinic, this call would transfer to "
-        "reception staff. Please contact the clinic directly during business hours."
+        "I cannot fully resolve this request, and a live transfer is not available. "
+        "Please contact the clinic directly during business hours."
     ),
     "provider_failure": (
         "I am encountering a temporary service failure with voice processing. "
-        "Live telephone transfer is not available in this demo. "
+        "Live telephone transfer is not available. "
         "Please contact the clinic directly to complete your request."
     ),
     "system_error": (
         "I am experiencing a system database error and cannot complete your request. "
-        "Live transfer is not available in this demo. "
+        "Live transfer is not available. "
         "Please call the clinic directly to manage your appointment."
     ),
     "verification_lockout": (
         "For your security, appointment verification has been locked due to multiple incorrect attempts. "
-        "Live telephone transfer is not available in this demo. "
+        "Live telephone transfer is not available. "
         "Please contact the clinic directly with your appointment details."
     ),
     "medical_emergency": (
@@ -123,7 +120,7 @@ DEMO_HANDOFF_SCRIPTS = {
     ),
     "out_of_scope": (
         "I cannot assist with that request as it falls outside clinic scheduling. "
-        "Live transfer is not available in this demo. Please consult your physician or clinic staff directly."
+        "Live transfer is not available. Please consult your physician or clinic staff directly."
     ),
 }
 
@@ -189,12 +186,12 @@ class ClinicVoiceTools:
     def _instrument(self, tool: Any) -> Any:
         """Measure the actual tool call without recording arguments or response text."""
         trace = self.trace
-        assert trace is not None
         @functools.wraps(tool)
         async def wrapped(*args: Any, **kwargs: Any) -> Any:
             started = time.perf_counter()
             try:
-                trace.record_tool_started(tool.__name__)
+                if trace:
+                    trace.record_tool_started(tool.__name__)
             except Exception:
                 logger.warning("Unable to record tool start", exc_info=False)
             token = _trace_result.set(("completed", None))
@@ -210,8 +207,9 @@ class ClinicVoiceTools:
                 result, reason = _trace_result.get() or ("error", "unexpected_error")
                 _trace_result.reset(token)
                 try:
-                    trace.record_tool(tool.__name__, result, (time.perf_counter() - started) * 1000,
-                                      reason if result in {"failed", "error"} else None)
+                    if trace:
+                        trace.record_tool(tool.__name__, result, (time.perf_counter() - started) * 1000,
+                                          reason if result in {"failed", "error"} else None)
                 except Exception:
                     logger.warning("Unable to record tool trace", exc_info=False)
 
@@ -668,14 +666,14 @@ class ClinicVoiceTools:
         category: str = "caller_requested",
     ) -> str:
         """Transfer caller to human reception staff under PRD §6.5 triggers."""
-        if category not in DEMO_HANDOFF_SCRIPTS:
+        if category not in HANDOFF_SCRIPTS:
             category = "caller_requested"
 
         await self.service.request_human_handoff(
             voice_session_id=self.voice_session_id,
             category=category,
         )
-        return DEMO_HANDOFF_SCRIPTS[category]
+        return HANDOFF_SCRIPTS[category]
 
     @llm.function_tool()
     async def escalate_medical_emergency(self, ctx: RunContext[Any]) -> str:
@@ -684,7 +682,7 @@ class ClinicVoiceTools:
             voice_session_id=self.voice_session_id,
             category="medical_emergency",
         )
-        return DEMO_HANDOFF_SCRIPTS["medical_emergency"]
+        return HANDOFF_SCRIPTS["medical_emergency"]
 
 
 def profile_id_or_1(ctx: ClinicContextDTO) -> int:

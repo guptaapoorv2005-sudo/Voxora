@@ -13,7 +13,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.routes_auth import check_origin, require_owner, signing_key
-from app.core.config import get_settings
+from app.core.config import AppSettings, get_settings
 from app.db.models.google_calendar import GoogleCalendarConnection, GoogleCalendarEvent
 from app.db.models.owner import OwnerSession, OwnerUser
 from app.db.session import get_db
@@ -22,12 +22,13 @@ router = APIRouter(prefix="/api/owner/google-calendar", tags=["google calendar"]
 SCOPE = "https://www.googleapis.com/auth/calendar.events.owned"
 
 
-def calendar_config():
+def calendar_config() -> AppSettings:
     settings = get_settings()
     if not all((settings.google_calendar_client_id, settings.google_calendar_client_secret,
                 settings.google_calendar_redirect_uri, settings.google_calendar_encryption_key)):
         raise HTTPException(503, "Google Calendar is not configured")
     try:
+        assert settings.google_calendar_encryption_key is not None
         Fernet(settings.google_calendar_encryption_key.encode())
     except (ValueError, TypeError):
         raise HTTPException(503, "Google Calendar encryption key is invalid") from None
@@ -35,13 +36,13 @@ def calendar_config():
 
 
 @router.get("")
-async def status(owner: OwnerUser = Depends(require_owner), db: AsyncSession = Depends(get_db)):
+async def status(owner: OwnerUser = Depends(require_owner), db: AsyncSession = Depends(get_db)) -> dict[str, bool]:
     row = await db.get(GoogleCalendarConnection, owner.id)
     return {"connected": row is not None, "needs_attention": bool(row and row.last_error)}
 
 
 @router.post("/connect", dependencies=[Depends(check_origin)])
-async def connect(request: Request, response: Response, owner: OwnerUser = Depends(require_owner)):
+async def connect(request: Request, response: Response, owner: OwnerUser = Depends(require_owner)) -> dict[str, str]:
     cfg = calendar_config()
     access = jwt.decode(request.cookies["voxora_access"], signing_key(), algorithms=["HS256"])
     now = datetime.now(UTC)
@@ -58,7 +59,7 @@ async def connect(request: Request, response: Response, owner: OwnerUser = Depen
 
 
 @router.get("/callback")
-async def callback(request: Request, db: AsyncSession = Depends(get_db)):
+async def callback(request: Request, db: AsyncSession = Depends(get_db)) -> RedirectResponse:
     cfg = calendar_config()
     state = request.query_params.get("state", "")
     cookie = request.cookies.get("voxora_calendar_state", "")
@@ -94,6 +95,7 @@ async def callback(request: Request, db: AsyncSession = Depends(get_db)):
                     raise ValueError("Calendar permission not granted")
             if not token:
                 raise ValueError("Missing refresh token")
+            assert cfg.google_calendar_encryption_key is not None
             encrypted = Fernet(cfg.google_calendar_encryption_key.encode()).encrypt(token.encode()).decode()
             existing = (await db.execute(select(GoogleCalendarConnection).where(
                 GoogleCalendarConnection.owner_id == owner_id).with_for_update())).scalar_one_or_none()
@@ -115,7 +117,7 @@ async def callback(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/disconnect", dependencies=[Depends(check_origin)])
-async def disconnect(owner: OwnerUser = Depends(require_owner), db: AsyncSession = Depends(get_db)):
+async def disconnect(owner: OwnerUser = Depends(require_owner), db: AsyncSession = Depends(get_db)) -> dict[str, bool]:
     row = (await db.execute(select(GoogleCalendarConnection).where(
         GoogleCalendarConnection.owner_id == owner.id).with_for_update())).scalar_one_or_none()
     if row:

@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 from cryptography.fernet import Fernet
@@ -17,7 +18,7 @@ logger = logging.getLogger("voxora.google_calendar")
 EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 
 
-def event_payload(appointment: Appointment, event_id: str) -> dict:
+def event_payload(appointment: Appointment, event_id: str) -> dict[str, Any]:
     # Include the information needed to identify the booking, but no contact details.
     return {"id": event_id, "summary": f"{appointment.service_name_snapshot} — {appointment.caller_name}",
             "start": {"dateTime": appointment.start_at.isoformat()},
@@ -67,6 +68,8 @@ async def reconcile_calendar() -> None:
         if not rows:
             return
         try:
+            if not cfg.google_calendar_encryption_key:
+                raise ValueError("Calendar encryption key is missing")
             refresh_token = Fernet(cfg.google_calendar_encryption_key.encode()).decrypt(connection.encrypted_refresh_token.encode()).decode()
             async with httpx.AsyncClient(timeout=15) as client:
                 response = await client.post("https://oauth2.googleapis.com/token", data={

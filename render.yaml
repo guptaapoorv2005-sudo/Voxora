@@ -1,0 +1,37 @@
+# One free web instance runs both the API and LiveKit agent; it sleeps when idle.
+services:
+  - type: web
+    name: voxora-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: uv sync --locked --no-dev
+    startCommand: uv run --no-sync python run_render.py
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.11
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: OWNER_JWT_SECRET
+        sync: false
+      - key: SESSION_SIGNING_SECRET
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false

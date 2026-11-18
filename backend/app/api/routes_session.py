@@ -1,8 +1,9 @@
+import ipaddress
 import logging
 from datetime import timedelta
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from livekit import api as lk_api
 from sqlalchemy import select
@@ -23,29 +24,19 @@ TOKEN_TTL = timedelta(seconds=300)
 async def create_session_token(
     settings: AppSettings = Depends(get_settings),
     db: AsyncSession = Depends(get_db),
+    request: Request = None,  # type: ignore[assignment]  # Direct tests may omit the injected request.
 ) -> JSONResponse:
-    """
-    Generate a short-lived LiveKit JWT for an incoming voice session.
-
-    DEV ONLY & LOCALHOST-ONLY: Strict runtime guard ensures this unauthenticated endpoint
-    only functions when ENVIRONMENT == 'development'. Fails closed otherwise.
-    Must never be bound publicly or deployed in development mode.
-    """
-    if settings.environment != "development":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "Session token generation is only available in development "
-                "environment on localhost."
-            ),
-        )
+    """Generate a short-lived LiveKit JWT for an incoming voice session."""
+    if settings.environment == "development" and request is not None:
+        try:
+            if not request.client or not ipaddress.ip_address(request.client.host).is_loopback:
+                raise HTTPException(403, "Development sessions require a loopback connection")
+        except ValueError:
+            raise HTTPException(403, "Development sessions require a loopback connection") from None
 
     try:
-        enabled = await db.scalar(
-            select(BusinessProfile.receptionist_enabled).where(
-                BusinessProfile.slug == "brightsmile"
-            )
-        )
+        query = select(BusinessProfile.receptionist_enabled).where(BusinessProfile.slug == "brightsmile")
+        enabled = await db.scalar(query)
     except SQLAlchemyError:
         raise HTTPException(status_code=503, detail="Receptionist unavailable") from None
     if enabled is not True:

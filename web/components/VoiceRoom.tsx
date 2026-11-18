@@ -14,8 +14,6 @@ import {
   VoiceAssistantControlBar,
 } from "@livekit/components-react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-
 interface TokenResponse {
   token: string;
   livekit_url: string;
@@ -31,7 +29,7 @@ export function VoiceRoom() {
     setIsLoading(true);
     setApiError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/sessions/token`, {
+      const response = await fetch(`/api/sessions/token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -65,7 +63,7 @@ export function VoiceRoom() {
           Voxora AI Dental Receptionist
         </h1>
         <p className="text-neutral-400 text-sm">
-          Phase 1: Real-time WebRTC Voice Spike (LiveKit Cloud, Deepgram Flux, Gemini Flash-Lite, ElevenLabs Flash)
+          Speak with our AI receptionist to ask questions or manage an appointment.
         </p>
       </div>
 
@@ -73,13 +71,6 @@ export function VoiceRoom() {
         <div className="p-4 rounded-xl bg-red-950/80 border border-red-700/60 text-red-200 text-sm space-y-1">
           <p className="font-semibold text-red-100">Unable to Start Voice Session</p>
           <p>{apiError}</p>
-          <p className="text-xs text-red-300/80 mt-1">
-            Note: Token generation is only available when backend is running with{" "}
-            <code className="px-1 py-0.5 bg-red-900 rounded text-red-200 font-mono">
-              ENVIRONMENT=development
-            </code>{" "}
-            on localhost.
-          </p>
         </div>
       )}
 
@@ -102,9 +93,9 @@ export function VoiceRoom() {
             </svg>
           </div>
           <div className="space-y-1">
-            <h2 className="text-lg font-medium text-white">Ready to test voice pipeline?</h2>
+            <h2 className="text-lg font-medium text-white">Ready to speak with the receptionist?</h2>
             <p className="text-sm text-neutral-400">
-              Click below to request a short-lived token and connect to LiveKit SFU.
+              Start a call to connect to the receptionist.
             </p>
           </div>
           <button

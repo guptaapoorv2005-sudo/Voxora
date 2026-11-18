@@ -168,7 +168,7 @@ async def test_token_dispatch_name_matches_worker_effective_name(
 
 
 @pytest.mark.asyncio
-async def test_production_guard_fails_closed_when_missing(
+async def test_default_production_environment_allows_voice_session(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("ENVIRONMENT", raising=False)
@@ -183,73 +183,72 @@ async def test_production_guard_fails_closed_when_missing(
     app.dependency_overrides[get_settings] = lambda: settings
     try:
         response = await client.post("/api/sessions/token")
-        assert response.status_code == 403
-        assert "only available in development environment" in response.json()["detail"]
+        assert response.status_code == 200
     finally:
         app.dependency_overrides.pop(get_settings, None)
 
 
 @pytest.mark.asyncio
-async def test_production_guard_rejects_production(
+async def test_production_allows_voice_session(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = make_test_settings(monkeypatch, environment="production")
     app.dependency_overrides[get_settings] = lambda: settings
     try:
         response = await client.post("/api/sessions/token")
-        assert response.status_code == 403
+        assert response.status_code == 200
     finally:
         app.dependency_overrides.pop(get_settings, None)
 
 
 @pytest.mark.asyncio
-async def test_production_guard_rejects_staging(
+async def test_staging_allows_voice_session(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = make_test_settings(monkeypatch, environment="staging")
     app.dependency_overrides[get_settings] = lambda: settings
     try:
         response = await client.post("/api/sessions/token")
-        assert response.status_code == 403
+        assert response.status_code == 200
     finally:
         app.dependency_overrides.pop(get_settings, None)
 
 
 @pytest.mark.asyncio
-async def test_production_guard_rejects_test(
+async def test_test_environment_allows_voice_session(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = make_test_settings(monkeypatch, environment="test")
     app.dependency_overrides[get_settings] = lambda: settings
     try:
         response = await client.post("/api/sessions/token")
-        assert response.status_code == 403
+        assert response.status_code == 200
     finally:
         app.dependency_overrides.pop(get_settings, None)
 
 
 @pytest.mark.asyncio
-async def test_production_guard_rejects_custom_dev(
+async def test_custom_environment_allows_voice_session(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = make_test_settings(monkeypatch, environment="dev")
     app.dependency_overrides[get_settings] = lambda: settings
     try:
         response = await client.post("/api/sessions/token")
-        assert response.status_code == 403
+        assert response.status_code == 200
     finally:
         app.dependency_overrides.pop(get_settings, None)
 
 
 @pytest.mark.asyncio
-async def test_production_guard_rejects_empty_string(
+async def test_empty_environment_allows_voice_session(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     settings = make_test_settings(monkeypatch, environment="")
     app.dependency_overrides[get_settings] = lambda: settings
     try:
         response = await client.post("/api/sessions/token")
-        assert response.status_code == 403
+        assert response.status_code == 200
     finally:
         app.dependency_overrides.pop(get_settings, None)
 

@@ -11,7 +11,7 @@ export default function Home() {
 
         <div className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs text-zinc-300">
           <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          Phase 1: Voice Transport Spike
+          AI voice receptionist
         </div>
 
         <div>
@@ -19,7 +19,7 @@ export default function Home() {
             href="/voice"
             className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-medium text-sm transition shadow-lg shadow-blue-900/30"
           >
-            Launch Voice Testing Console &rarr;
+            Speak to the receptionist &rarr;
           </Link>
         </div>
         <p><Link href="/dashboard" className="text-blue-300 underline">Owner dashboard</Link></p>

@@ -1,8 +1,8 @@
 import { VoiceRoom } from "@/components/VoiceRoom";
 
 export const metadata = {
-  title: "Voice Test | Voxora AI",
-  description: "Phase 1 WebRTC Voice Transport Spike testing interface.",
+  title: "Voice Receptionist | Voxora AI",
+  description: "Speak with the Voxora AI receptionist.",
 };
 
 export default function VoicePage() {
