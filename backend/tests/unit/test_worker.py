@@ -416,6 +416,22 @@ def test_create_worker_server_registers_effective_agent_name() -> None:
         sys.modules.pop("worker", None)
 
 
+@pytest.mark.parametrize("configured,expected", [(None, "0"), ("1", "1")])
+def test_worker_local_inference_preload_default_and_override(
+    monkeypatch: pytest.MonkeyPatch, configured: str | None, expected: str
+) -> None:
+    """Disable unused model preloading unless the operator explicitly opts in."""
+    import os
+
+    if configured is None:
+        monkeypatch.delenv("LIVEKIT_AGENTS_PRELOAD_LOCAL_INFERENCE", raising=False)
+    else:
+        monkeypatch.setenv("LIVEKIT_AGENTS_PRELOAD_LOCAL_INFERENCE", configured)
+    worker = importlib.import_module("worker")
+    worker.create_worker_server(_make_settings())
+    assert os.environ["LIVEKIT_AGENTS_PRELOAD_LOCAL_INFERENCE"] == expected
+
+
 def test_verify_livekit_native_rtc_fails_fast_on_oserror(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

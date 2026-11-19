@@ -588,6 +588,11 @@ def create_worker_server(settings: WorkerSettings) -> AgentServer:
     effective_agent_name = settings.effective_agent_name
     os.environ["LIVEKIT_AGENT_NAME"] = effective_agent_name
 
+    # LiveKit otherwise preloads local VAD and end-of-turn models into its job
+    # forkserver. Deepgram owns turn detection here, so these weights are unused.
+    # Set before cli.run_app starts the pool; allow an explicit operator override.
+    os.environ.setdefault("LIVEKIT_AGENTS_PRELOAD_LOCAL_INFERENCE", "0")
+
     # On a small shared instance, start job processes only when a call arrives.
     # Keep LiveKit's internal health server local so Render exposes the API port.
     server = AgentServer(num_idle_processes=0, host="127.0.0.1")
