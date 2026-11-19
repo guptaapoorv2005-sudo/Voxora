@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Activity, ArrowLeft, ArrowRight, AudioLines, CalendarDays, CheckCircle2, Clock3, FileText, Headphones, HelpCircle, LayoutDashboard, LogOut, MapPin, Plus, Search, Settings2, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 type Value = string | number | boolean | null;
 type Row = Record<string, Value>;
 type Section = "overview" | "appointments" | "profile" | "hours" | "closures" | "services" | "faqs" | "policies" | "calls";
 const sections: Section[] = ["overview", "appointments", "profile", "hours", "closures", "services", "faqs", "policies", "calls"];
 const names: Record<Section, string> = { overview: "Overview", appointments: "Appointments", profile: "Business profile", hours: "Hours", closures: "Closures", services: "Services", faqs: "FAQs", policies: "Policies", calls: "Calls" };
+const icons: Record<Section, typeof LayoutDashboard> = { overview: LayoutDashboard, appointments: CalendarDays, profile: MapPin, hours: Clock3, closures: CalendarDays, services: Sparkles, faqs: HelpCircle, policies: ShieldCheck, calls: Headphones };
+const descriptions: Record<Section, string> = { overview: "A little overview of your reception, all in one place.", appointments: "Review appointments recorded by your receptionist.", profile: "Keep the details your receptionist shares up to date.", hours: "Set the hours your clinic is available for appointments.", closures: "Add dates when your clinic will be unavailable.", services: "Manage the services available to your callers.", faqs: "Give your receptionist answers to common questions.", policies: "Keep your clinic’s policies clear and current.", calls: "Review call activity and explore individual traces." };
 const defaults: Record<string, Row> = {
   closures: { date: "", reason: "" },
   services: { name: "", description: "", duration_minutes: 30, buffer_minutes: 0, price_inr: null, min_lead_time_hours: 0, cancellation_window_hours: 24, is_active: true, sort_order: 0 },
@@ -57,12 +61,12 @@ function GoogleCalendar() {
     } catch { setMessage("Unable to update Google Calendar. Check the integration setup and try again."); }
     finally { setBusy(false); }
   }
-  return <section className="mt-6 space-y-3 rounded border border-zinc-700 p-4">
-    <h3 className="text-lg font-semibold">Google Calendar</h3>
-    <p>{status === null ? "Checking connection…" : status.connected ? "Connected to your primary calendar." : "Connect your calendar to sync upcoming appointments."}</p>
-    {status?.needs_attention && <p className="text-amber-300">Sync needs attention. Check your Google connection or reconnect.</p>}
-    {status && <button disabled={busy} className="rounded border px-4 py-2" onClick={() => void change(status.connected ? "disconnect" : "connect")}>{status.connected ? "Disconnect Google Calendar" : "Connect Google Calendar"}</button>}
-    {message && <p role="status" className="text-amber-300">{message}</p>}
+  return <section className="owner-card integration-card">
+    <div className="card-heading"><span className="owner-icon"><CalendarDays size={19} /></span><span className={`owner-pill ${status?.connected ? "is-active" : ""}`}>{status === null ? "Checking" : status.connected ? "Connected" : "Not connected"}</span></div>
+    <h3>Google Calendar</h3><p>{status === null ? "Checking connection…" : status.connected ? "Upcoming appointments sync with your primary calendar." : "Connect your primary calendar to sync upcoming appointments."}</p>
+    {status?.needs_attention && <p className="owner-warning" role="status">Sync needs attention. Check your Google connection or reconnect.</p>}
+    {status && <Button variant="outline" size="sm" disabled={busy} onClick={() => void change(status.connected ? "disconnect" : "connect")}>{busy ? "Please wait…" : status.connected ? "Disconnect calendar" : "Connect calendar"}<ArrowRight size={14} /></Button>}
+    {message && <p role="status" className="owner-feedback">{message}</p>}
   </section>;
 }
 
@@ -126,7 +130,7 @@ export default function Dashboard() {
   async function save() {
     setLoading(true); setMessage("");
     try {
-      const payload = section === "profile" && profile ? Object.fromEntries(profileFields.map(k => [k, profile[k] ?? null])) : rows;
+      const payload = section === "profile" && profile ? Object.fromEntries(profileFields.map(k => [k, profile[k] ?? null])) : section === "hours" ? rows.map(row => row.is_closed ? { ...row, open_time: null, close_time: null, break_start: null, break_end: null } : row) : rows;
       const response = await api(`/api/owner/${section}`, { method: "PUT", body: JSON.stringify(payload) });
       if (activeSection.current !== section) return;
       if (response.status === 401) { setAuthenticated(false); return; }
@@ -152,30 +156,46 @@ export default function Dashboard() {
   function input(key: string, value: Value, change: (v: Value) => void) {
     if (key === "id") return null;
     const title = key === "day_of_week" ? "Day (0 = Monday, 6 = Sunday)" : label(key);
-    if (key === "day_of_week") return <p key={key}>{["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][Number(value)]}</p>;
-    if (typeof value === "boolean") return <label key={key} className="flex gap-2"><input type="checkbox" checked={value} onChange={e => change(e.target.checked)} />{title}</label>;
+    if (key === "day_of_week") return <p key={key} className="owner-day">{["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][Number(value)]}</p>;
+    if (typeof value === "boolean") return <label key={key} className="owner-check"><input type="checkbox" checked={value} onChange={e => change(e.target.checked)} />{title}</label>;
     const type = key === "date" ? "date" : key.endsWith("_time") || key === "break_start" || key === "break_end" ? "time" : numeric.has(key) ? "number" : "text";
-    return <label key={key} className="block text-sm">{title}<input className="mt-1 block w-full rounded border border-zinc-600 bg-zinc-900 p-2 text-white" type={type} step={key === "price_inr" ? "0.01" : undefined} value={value === null ? "" : String(value)} onChange={e => change(e.target.value === "" && (numeric.has(key) || type === "time" || ["address_line2", "phone", "email", "website", "description"].includes(key)) ? null : numeric.has(key) ? Number(e.target.value) : e.target.value)} /></label>;
+    return <label key={key} className="owner-label">{title}<input className="owner-input" type={type} step={key === "price_inr" ? "0.01" : undefined} value={value === null ? "" : String(value)} onChange={e => change(e.target.value === "" && (numeric.has(key) || type === "time" || ["address_line2", "phone", "email", "website", "description"].includes(key)) ? null : numeric.has(key) ? Number(e.target.value) : e.target.value)} /></label>;
   }
   const editRow = (index: number, key: string, value: Value) => setRows(prev => prev.map((row, i) => i === index ? { ...row, [key]: value } : row));
   const readOnly = section === "appointments" || section === "calls";
-  return <main className="dashboard-surface mx-auto max-w-6xl p-6 text-zinc-100">
-    <header className="mb-6 flex flex-wrap items-center justify-between gap-4"><div><Link href="/" className="text-sky-300">Voxora</Link><h1 className="text-3xl font-semibold">Owner dashboard</h1></div>{authenticated && <button className="rounded border px-4 py-2" onClick={() => void logout()}>Sign out</button>}</header>
-    {authenticated === false ? <form onSubmit={login} className="max-w-md space-y-4 rounded border border-zinc-700 p-5"><h2 className="text-xl">Owner sign in</h2><label className="block">Email<input className="block w-full rounded bg-zinc-900 p-2" type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></label><label className="block">Password<input className="block w-full rounded bg-zinc-900 p-2" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></label><button disabled={loading} className="rounded bg-blue-600 px-4 py-2">Sign in</button></form> : authenticated === null ? <p>Checking your session…</p> : <>
-      <nav aria-label="Dashboard sections" className="mb-6 flex flex-wrap gap-2">{sections.map(s => <button key={s} onClick={() => { if (s !== activeSection.current) { activeSection.current = s; loadVersion.current += 1; setRows([]); if (s === "overview" || s === "profile") setProfile(null); setLoading(true); setMessage(""); setSection(s); } setFilter(""); }} aria-current={section === s ? "page" : undefined} className={`rounded px-3 py-2 ${section === s ? "bg-blue-600" : "bg-zinc-800"}`}>{names[s]}</button>)}</nav>
-      <h2 className="mb-4 text-2xl font-semibold">{names[section]}</h2>
-      {loading && <p role="status">Loading…</p>}
-      {section === "overview" && profile && <div className="space-y-3"><p>Receptionist is <strong>{profile.receptionist_enabled ? "enabled" : "disabled"}</strong>.</p><p className="text-zinc-400">Disabling prevents new sessions. Calls already in progress continue.</p><button disabled={loading} className="rounded bg-blue-600 px-4 py-2" onClick={() => void toggle()}>{profile.receptionist_enabled ? "Disable receptionist" : "Enable receptionist"}</button></div>}
-      {section === "overview" && <GoogleCalendar />}
-      {section === "profile" && profile && <div className="max-w-2xl space-y-3"><p>Timezone: {profile.timezone}</p>{profileFields.map(k => input(k, profile[k] ?? null, v => setProfile({ ...profile, [k]: v })))}<button disabled={loading} className="rounded bg-blue-600 px-4 py-2" onClick={() => void save()}>Save changes</button></div>}
-      {readOnly && <label>Filter <input className="rounded bg-zinc-800 p-2" value={filter} onChange={e => setFilter(e.target.value)} /></label>}
-      {section !== "overview" && section !== "profile" && <div className="mt-4 space-y-4">{!loading && !message && rows.length === 0 && <p>No {names[section].toLowerCase()} found.</p>}{rows.map((row, index) => {
-        if (readOnly && !JSON.stringify(row).toLowerCase().includes(filter.toLowerCase())) return null;
-        if (readOnly) return <article key={row.id == null ? `${section}-row-${index}` : `${section}-id-${String(row.id)}`} className="rounded border border-zinc-700 p-4">{Object.entries(row).map(([k, v]) => <p key={k}><span className="text-zinc-400">{label(k)}:</span> {String(v ?? "—")}</p>)}{section === "calls" && row.id != null && <Link className="text-sky-300 underline" href={`/calls/${encodeURIComponent(String(row.id))}`}>View call details</Link>}</article>;
-        return <fieldset key={index} className="grid gap-3 rounded border border-zinc-700 p-4 md:grid-cols-2"><legend>{section === "hours" ? "Schedule" : `Entry ${index + 1}`}</legend>{Object.entries(row).map(([k, v]) => input(k, v, value => editRow(index, k, value)))}{section !== "hours" && <button type="button" className="text-left text-red-300" onClick={() => setRows(rows.filter((_, i) => i !== index))}>Remove entry</button>}</fieldset>;
-      })}{!readOnly && <div className="flex gap-3">{defaults[section] && <button disabled={loading} className="rounded border px-4 py-2" onClick={() => setRows([...rows, { ...defaults[section] }])}>Add entry</button>}<button disabled={loading} className="rounded bg-blue-600 px-4 py-2" onClick={() => void save()}>Save changes</button></div>}</div>}
-    </>}
-    {message && <p role="status" className="mt-4 text-amber-300">{message}</p>}
+  const visibleRows = readOnly ? rows.filter(row => JSON.stringify(row).toLowerCase().includes(filter.toLowerCase())) : rows;
+  function navigate(s: Section) {
+    if (s !== activeSection.current) { activeSection.current = s; loadVersion.current += 1; setRows([]); if (s === "overview" || s === "profile") setProfile(null); setLoading(true); setMessage(""); setSection(s); }
+    setFilter("");
+  }
+  return <main className="dashboard-surface owner-shell">
+    <header className="owner-topbar"><Link href="/" className="brand owner-brand"><span className="brand-mark"><AudioLines size={19} /></span> voxora<span className="brand-dot">.</span></Link><div className="owner-topbar-right"><span className="owner-workspace">BRIGHTSMILE / OWNER SPACE</span>{authenticated && <button className="owner-signout" disabled={loading} onClick={() => void logout()}><LogOut size={16} /><span>Sign out</span></button>}</div></header>
+    {authenticated !== true ? <div className="owner-auth-wrap"><div className="owner-auth-intro"><div className="eyebrow"><span className="eyebrow-line" /> YOUR CLINIC, IN GOOD HANDS</div><h1>A calmer way to<br /><em>manage your day.</em></h1><p>Everything your receptionist needs, together in one place.</p></div><div className="owner-auth-card owner-card">{authenticated === false ? <form onSubmit={login} className="owner-form"><span className="owner-icon"><ShieldCheck size={20} /></span><div><p className="owner-kicker">OWNER ACCESS</p><h2>Welcome back.</h2><p>Sign in to manage your clinic.</p></div><label className="owner-label">Email address<input className="owner-input" type="email" autoComplete="username" placeholder="you@clinic.com" required value={email} onChange={e => setEmail(e.target.value)} /></label><label className="owner-label">Password<input className="owner-input" type="password" autoComplete="current-password" placeholder="Enter your password" required value={password} onChange={e => setPassword(e.target.value)} /></label><Button disabled={loading} className="w-full">{loading ? "Signing in…" : "Sign in"}<ArrowRight size={16} /></Button></form> : <div className="owner-form"><p role="status">{message || "Checking your session…"}</p>{message && <Button onClick={() => void load()}>Try again</Button>}</div>}{message && authenticated === false && <p role="status" className="owner-feedback">{message}</p>}</div></div> :
+    <div className="owner-layout"><aside className="owner-sidebar"><p className="owner-nav-label">WORKSPACE</p><nav aria-label="Dashboard sections" className="owner-nav">{sections.map(s => { const Icon = icons[s]; return <button key={s} onClick={() => navigate(s)} aria-current={section === s ? "page" : undefined} className={section === s ? "active" : ""}><Icon size={17} /><span>{names[s]}</span></button>; })}</nav><div className="owner-sidebar-note"><Activity size={17} /><p>Made for the moments that matter.</p></div></aside>
+      <div className="owner-content"><div className="owner-content-inner"><div className="owner-page-heading"><div><p className="owner-kicker">CLINIC WORKSPACE / {names[section].toUpperCase()}</p><h1>{section === "overview" ? "Your clinic, at a glance." : names[section]}</h1><p>{descriptions[section]}</p></div><Link className="owner-home-link" href="/"><ArrowLeft size={15} /> Back to site</Link></div>
+      {message && <div role="status" className="owner-notice">{message}</div>}
+      {loading && <div role="status" className="owner-loading"><span className="owner-spinner" /> Loading {names[section].toLowerCase()}…</div>}
+      {section === "overview" && profile && <div className="owner-overview-grid"><section className="owner-card receptionist-card"><div className="card-heading"><span className="owner-icon"><AudioLines size={20} /></span><span className={`owner-pill ${profile.receptionist_enabled ? "is-active" : ""}`}><span />{profile.receptionist_enabled ? "Accepting calls" : "Paused"}</span></div><div><p className="owner-kicker">YOUR VOICE RECEPTIONIST</p><h2>{profile.receptionist_enabled ? "Ready to help." : "Reception is paused."}</h2><p>Disabling prevents new sessions. Calls already in progress continue.</p></div><Button variant={profile.receptionist_enabled ? "outline" : "default"} size="sm" disabled={loading} onClick={() => void toggle()}>{profile.receptionist_enabled ? "Pause receptionist" : "Enable receptionist"}<ArrowRight size={14} /></Button></section><GoogleCalendar /><section className="owner-card owner-quick"><span className="owner-icon"><Settings2 size={19} /></span><h3>Keep things current</h3><p>Update your clinic information, services, hours, and policies as things change.</p><button onClick={() => navigate("profile")}>Edit clinic profile <ArrowRight size={14} /></button></section></div>}
+      {section === "overview" && !profile && !loading && <Button variant="outline" onClick={() => void load()}>Try loading overview again</Button>}
+      {section === "profile" && profile && <section className="owner-card owner-editor"><div className="owner-section-head"><div><p className="owner-kicker">CLINIC DETAILS</p><h2>Business profile</h2><p>These details help your receptionist answer questions accurately.</p></div><span className="owner-pill">{String(profile.timezone ?? "—")}</span></div><div className="owner-fields">{profileFields.map(k => input(k, profile[k] ?? null, v => setProfile({ ...profile, [k]: v })))}</div><div className="owner-actions"><Button disabled={loading} onClick={() => void save()}>Save changes <ArrowRight size={15} /></Button></div></section>}
+      {readOnly && <div className="owner-search"><Search size={17} /><label className="sr-only" htmlFor="record-filter">Filter {names[section].toLowerCase()}</label><input id="record-filter" placeholder={`Search ${names[section].toLowerCase()}…`} value={filter} onChange={e => setFilter(e.target.value)} /></div>}
+      {section !== "overview" && section !== "profile" && <div className="owner-records">{!loading && !message && visibleRows.length === 0 && <div className="owner-empty"><span className="owner-icon"><FileText size={20} /></span><h2>{filter ? "No matching results" : `No ${names[section].toLowerCase()} yet`}</h2><p>{filter ? "Try a different search term." : readOnly ? "Records will appear here when available." : "Add an entry to get started."}</p></div>}{visibleRows.map((row, index) => {
+        if (readOnly) return <article key={row.id == null ? `${section}-row-${index}` : `${section}-id-${String(row.id)}`} className="owner-card owner-record"><div className="owner-record-head"><span className="owner-icon">{section === "calls" ? <Headphones size={18} /> : <CalendarDays size={18} />}</span><span className="owner-kicker">{section === "calls" ? "CALL RECORD" : "APPOINTMENT"}</span></div><dl>{Object.entries(row).map(([k, v]) => <div key={k}><dt>{label(k)}</dt><dd>{String(v ?? "—")}</dd></div>)}</dl>{section === "calls" && row.id != null && <Link className="owner-inline-link" href={`/calls/${encodeURIComponent(String(row.id))}`}>View call details <ArrowRight size={14} /></Link>}</article>;
+        if (section === "hours") {
+          const day = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][Number(row.day_of_week)] ?? "Day";
+          const closed = row.is_closed === true;
+          return <fieldset key={String(row.day_of_week)} className="owner-card schedule-card"><legend className="sr-only">{day} hours</legend>
+            <div className="schedule-header"><div><p className="owner-kicker">WEEKLY HOURS</p><h2>{day}</h2><p>{closed ? "The clinic is closed this day." : "Set opening hours and an optional break."}</p></div>
+              <label className="schedule-toggle"><input type="checkbox" checked={closed} onChange={e => editRow(index, "is_closed", e.target.checked)} /><span>Closed</span></label></div>
+            <fieldset className="schedule-times" disabled={closed}><legend className="sr-only">{day} opening and break times</legend>
+              <div className="schedule-group"><p className="schedule-group-title">CLINIC HOURS</p><div className="schedule-pair">{["open_time", "close_time"].map(key => input(key, row[key] ?? null, value => editRow(index, key, value)))}</div></div>
+              <div className="schedule-group"><p className="schedule-group-title">BREAK <span>OPTIONAL</span></p><div className="schedule-pair">{["break_start", "break_end"].map(key => input(key, row[key] ?? null, value => editRow(index, key, value)))}</div></div>
+            </fieldset>{closed && <p className="schedule-note">Hours will be cleared when you save this closed day.</p>}
+          </fieldset>;
+        }
+        return <fieldset key={index} className="owner-card owner-editor"><legend className="sr-only">{`Entry ${index + 1}`}</legend><div className="owner-section-head"><div><p className="owner-kicker">{names[section].toUpperCase()}</p><h2>{`Entry ${index + 1}`}</h2></div><button type="button" className="owner-remove" onClick={() => setRows(rows.filter((_, i) => i !== index))}><Trash2 size={15} /> Remove</button></div><div className="owner-fields">{Object.entries(row).map(([k, v]) => input(k, v, value => editRow(index, k, value)))}</div></fieldset>;
+      })}{!readOnly && <div className="owner-actions">{defaults[section] && <Button variant="outline" disabled={loading} onClick={() => setRows([...rows, { ...defaults[section] }])}><Plus size={16} /> Add entry</Button>}<Button disabled={loading} onClick={() => void save()}><CheckCircle2 size={16} /> Save changes</Button></div>}</div>}
+      </div></div></div>}
   </main>;
 }
 
