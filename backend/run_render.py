@@ -10,11 +10,19 @@ import sys
 import time
 
 
+def worker_environment() -> dict[str, str]:
+    """Limit diagnostic overhead on the small shared instance; allow overrides."""
+    env = os.environ.copy()
+    env.setdefault("LIVEKIT_AGENTS_LOOP_BLOCK_WARN_MS", "1000")
+    env.setdefault("LIVEKIT_AGENTS_LOOP_BLOCK_ERROR_MS", "2000")
+    return env
+
+
 def main() -> int:
     port = os.environ.get("PORT", "10000")
     children = [
         subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", port]),
-        subprocess.Popen([sys.executable, "worker.py", "start"]),
+        subprocess.Popen([sys.executable, "worker.py", "start"], env=worker_environment()),
     ]
     stopping = False
 
