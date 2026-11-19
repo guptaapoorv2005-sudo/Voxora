@@ -412,6 +412,7 @@ def test_create_worker_server_registers_effective_agent_name() -> None:
         assert getattr(server, "_agent_name", None) == "voxora-agent"
         assert server._num_idle_processes == 0
         assert server._host == "127.0.0.1"
+        assert server.setup_fnc is worker.prewarm_job_process
     finally:
         sys.modules.pop("worker", None)
 
@@ -479,3 +480,48 @@ async def test_worker_disposes_engine_on_failure(monkeypatch: pytest.MonkeyPatch
         await worker.entrypoint(mock_ctx)
 
     mock_engine.dispose.assert_awaited_once()
+
+@pytest.mark.asyncio
+async def test_shutdown_stops_call_retention_before_disposing_engine(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A call must not keep its cleanup task running on a disposed engine."""
+    worker = importlib.import_module("worker")
+    monkeypatch.setattr(worker, "get_worker_settings", _make_settings)
+    monkeypatch.setattr(worker, "receptionist_enabled", AsyncMock(return_value=False))
+    engine = MagicMock()
+    engine.dispose = AsyncMock()
+    monkeypatch.setattr(worker, "create_async_engine", lambda *args, **kwargs: engine)
+
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.commit = AsyncMock()
+    session_context = MagicMock()
+    session_context.__aenter__ = AsyncMock(return_value=db)
+    session_context.__aexit__ = AsyncMock(return_value=None)
+    monkeypatch.setattr(worker, "async_sessionmaker", lambda *args, **kwargs: lambda: session_context)
+
+    stopped = asyncio.Event()
+
+    async def retention(_factory: Any) -> None:
+        try:
+            await asyncio.Event().wait()
+        finally:
+            stopped.set()
+
+    monkeypatch.setattr(worker, "_periodic_retention_cleanup_task", retention)
+    trace = MagicMock()
+    trace.outcome = "completed"
+    trace.run = AsyncMock()
+    trace.flush = AsyncMock()
+    monkeypatch.setattr(worker, "CallTraceRecorder", lambda *args: trace)
+    ctx = MagicMock()
+    ctx.connect = AsyncMock()
+    ctx.room.name = "voxora-a1b2c3d4e5f6"
+    await worker.entrypoint(ctx)
+    await asyncio.sleep(0)
+    callback = ctx.add_shutdown_callback.call_args.args[0]
+    await callback()
+    assert stopped.is_set()
+    trace.flush.assert_awaited_once_with(outcome="completed")
+    engine.dispose.assert_awaited_once()

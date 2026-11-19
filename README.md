@@ -152,3 +152,5 @@ Before real clinic use, validate database concurrency and recovery with isolated
 - [Architecture](Architecture.md) and [product requirements](PRD.md): design and intended scope.
 - [Implementation roadmap](phases.md) and [phase notes](docs/): decisions, tests, tradeoffs and learning gates.
 - [Phase 10 notes](docs/phase-10-notes.md): end-to-end explanation and current verification status.
+
+The voice worker disables LiveKit's unused local-inference model preload by default because Deepgram handles turn detection. This reduces a potential memory spike during job startup but has not been measured against a live Render call. See the [Render memory investigation](docs/phase-9-notes.md) for the logs, verification steps, and remaining resource limits.

@@ -42,6 +42,7 @@ from livekit.agents import (
     ConversationItemAddedEvent,
     ErrorEvent,
     JobContext,
+    JobProcess,
     SessionUsageUpdatedEvent,
     UserInputTranscribedEvent,
     UserStateChangedEvent,
@@ -366,9 +367,6 @@ class VoiceSessionCoordinator:
         await self.inactivity.trigger_shutdown(drain=False)
 
 
-_retention_task: asyncio.Task[None] | None = None
-
-
 async def _periodic_retention_cleanup_task(sessionmaker: async_sessionmaker[AsyncSession]) -> None:
     """Background task running on worker startup and every 24 hours under advisory locks."""
     is_initial_run = True
@@ -465,7 +463,6 @@ async def receptionist_enabled(session: AsyncSession) -> bool:
 
 async def entrypoint(ctx: JobContext) -> None:
     """Entrypoint invoked by LiveKit when a caller joins a room and triggers dispatch."""
-    global _retention_task
     settings = get_worker_settings()
     session_id = generate_opaque_session_id()
     room_name = getattr(getattr(ctx, "room", None), "name", None)
@@ -486,6 +483,7 @@ async def entrypoint(ctx: JobContext) -> None:
     trace = CallTraceRecorder(session_factory, room_name, session_id)
     trace.record("session_started")
     trace_task = asyncio.create_task(trace.run(), name="voxora-trace-flush")
+    retention_task: asyncio.Task[None] | None = None
 
     async def _on_shutdown(reason: str = "") -> None:
         try:
@@ -502,6 +500,12 @@ async def entrypoint(ctx: JobContext) -> None:
         except Exception:
             pass
         finally:
+            if retention_task is not None:
+                retention_task.cancel()
+                try:
+                    await retention_task
+                except asyncio.CancelledError:
+                    pass
             trace.stop()
             await trace_task
             await trace.flush(outcome=trace.outcome)
@@ -509,12 +513,12 @@ async def entrypoint(ctx: JobContext) -> None:
 
     ctx.add_shutdown_callback(_on_shutdown)
 
-    # Start background retention cleanup task if not already running
-    if _retention_task is None or _retention_task.done():
-        _retention_task = asyncio.create_task(
-            _periodic_retention_cleanup_task(session_factory),
-            name="voxora-retention-cleanup",
-        )
+    # Each call owns its cleanup task and database engine; stop both together.
+    # PostgreSQL advisory locking prevents simultaneous cleanup across calls.
+    retention_task = asyncio.create_task(
+        _periodic_retention_cleanup_task(session_factory),
+        name="voxora-retention-cleanup",
+    )
 
     try:
         async with session_factory() as db_session:
@@ -583,6 +587,11 @@ def verify_livekit_native_rtc() -> None:
         raise SystemExit(1) from exc
 
 
+def prewarm_job_process(_process: JobProcess) -> None:
+    """Load the DB driver before the job's async entrypoint starts."""
+    import asyncpg  # noqa: F401
+
+
 def create_worker_server(settings: WorkerSettings) -> AgentServer:
     """Create and verify an ``AgentServer`` bound to ``settings.effective_agent_name``."""
     effective_agent_name = settings.effective_agent_name
@@ -595,7 +604,7 @@ def create_worker_server(settings: WorkerSettings) -> AgentServer:
 
     # On a small shared instance, start job processes only when a call arrives.
     # Keep LiveKit's internal health server local so Render exposes the API port.
-    server = AgentServer(num_idle_processes=0, host="127.0.0.1")
+    server = AgentServer(num_idle_processes=0, host="127.0.0.1", setup_fnc=prewarm_job_process)
     server.rtc_session(entrypoint, agent_name=effective_agent_name)
 
     registered_name = getattr(server, "_agent_name", None)
