@@ -139,6 +139,7 @@ class VoiceSessionCoordinator:
         self.turn_audio_started = False
         self.fallback_spoken = False
         self._error_tasks: set[asyncio.Task[None]] = set()
+        self._last_usage: tuple[int | None, int | None, int | None] | None = None
 
         self.inactivity = CallInactivityController(
             session=session,
@@ -200,8 +201,8 @@ class VoiceSessionCoordinator:
         def on_user_input_transcribed(event: UserInputTranscribedEvent) -> None:
             transcript = getattr(event, "transcript", "") or ""
             is_final = bool(getattr(event, "is_final", False))
-            if transcript.strip():
-                # Log only structural boolean metadata — never raw speech text.
+            if transcript.strip() and is_final:
+                # Partial transcripts still drive inactivity, but do not need individual logs.
                 self._log(
                     logger,
                     "user_transcript_received",
@@ -259,16 +260,28 @@ class VoiceSessionCoordinator:
 
         @self.session.on("session_usage_updated")
         def on_session_usage_updated(event: SessionUsageUpdatedEvent) -> None:
-            usage = event.usage
+            # LiveKit 1.8 exposes cumulative per-model usage, not flat totals.
+            # Emit only when a supported total changes; never include speech text.
+            models = getattr(event.usage, "model_usage", ())
+            llm_usage = [item for item in models if getattr(item, "type", None) == "llm_usage"]
+            tts_usage = [item for item in models if getattr(item, "type", None) == "tts_usage"]
+            totals = (
+                sum(item.input_tokens for item in llm_usage) if llm_usage else None,
+                sum(item.output_tokens for item in llm_usage) if llm_usage else None,
+                sum(item.characters_count for item in tts_usage) if tts_usage else None,
+            )
+            if totals == (None, None, None) or totals == self._last_usage:
+                return
+            self._last_usage = totals
             self._log(
                 logger,
                 "session_usage_recorded",
                 room_name=self.room_name,
                 session_id=self.session_id,
                 metadata={
-                    "prompt_tokens": getattr(usage, "prompt_tokens", None),
-                    "completion_tokens": getattr(usage, "completion_tokens", None),
-                    "tts_characters": getattr(usage, "tts_characters", None),
+                    "prompt_tokens": totals[0],
+                    "completion_tokens": totals[1],
+                    "tts_characters": totals[2],
                 },
             )
 

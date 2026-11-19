@@ -525,3 +525,43 @@ async def test_shutdown_stops_call_retention_before_disposing_engine(
     assert stopped.is_set()
     trace.flush.assert_awaited_once_with(outcome="completed")
     engine.dispose.assert_awaited_once()
+
+@pytest.mark.asyncio
+async def test_partial_transcripts_drive_inactivity_without_flooding_trace() -> None:
+    worker = importlib.import_module("worker")
+    session = _FakeEmitterSession()
+    trace = MagicMock()
+    coordinator = worker.VoiceSessionCoordinator(
+        session=session, settings=_make_settings(), room_name="voxora-a1b2c3d4e5f6",
+        session_id="sess-0123456789ab", trace=trace,
+    )
+    coordinator.attach()
+    coordinator.inactivity.on_user_input_transcribed = MagicMock()
+    for text in ("first", "first partial", "final words"):
+        session.emit("user_input_transcribed", SimpleNamespace(transcript=text, is_final=text == "final words"))
+    assert coordinator.inactivity.on_user_input_transcribed.call_count == 3
+    trace.record.assert_called_once_with("user_transcript_received", {"is_final": True})
+    await coordinator.inactivity.aclose()
+
+
+def test_usage_updates_log_changed_cumulative_totals_only() -> None:
+    worker = importlib.import_module("worker")
+    session = _FakeEmitterSession()
+    trace = MagicMock()
+    coordinator = worker.VoiceSessionCoordinator(
+        session=session, settings=_make_settings(), room_name="voxora-a1b2c3d4e5f6",
+        session_id="sess-0123456789ab", trace=trace,
+    )
+    coordinator.attach()
+    empty = SimpleNamespace(usage=SimpleNamespace(model_usage=[]))
+    session.emit("session_usage_updated", empty)
+    trace.record.assert_not_called()
+    usage = SimpleNamespace(usage=SimpleNamespace(model_usage=[
+        SimpleNamespace(type="llm_usage", input_tokens=10, output_tokens=4),
+        SimpleNamespace(type="tts_usage", characters_count=30),
+    ]))
+    session.emit("session_usage_updated", usage)
+    session.emit("session_usage_updated", usage)
+    trace.record.assert_called_once_with("session_usage_recorded", {
+        "prompt_tokens": 10, "completion_tokens": 4, "tts_characters": 30,
+    })
